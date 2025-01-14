@@ -4,9 +4,23 @@ import json
 
 
 class SearchResult:
+    """
+    A storage class that holds the information for a singal search result from the SearXNG API
+    """
+
     def __init__(
         self, url: str, title: str, thumbnail: str, positions: List[str], score: float
     ) -> None:
+        """
+        Takes the arguments and stores them in the class
+
+        Args:
+            url             (str): The url of the search result
+            title           (str): The title of the page referenced by this search result
+            thumbnail       (str): The url for the thumbnail of the result (if exists)
+            positions (List[str]): The position of this result in the search results from each engine that returned this url
+            score         (float): The search engine ranking for how close of a match to the query this result is
+        """
         self.url = url
         self.title = title
         self.thumbnail = thumbnail
@@ -14,10 +28,23 @@ class SearchResult:
         self.score = score
 
     def __str__(self) -> str:
+        """
+        Returns the string representation of all class members
+
+        Returns:
+            str: The string representation of this class
+        """
         return f"url:{self.url}\ntitle:{self.title}\nthumbnail:{self.thumbnail}\npositions:{self.positions}\nscore:{self.score}\n"
 
 
 class SearchParameters:
+    """
+    A storage class that holds most of the parameters needed to do a search
+
+    This class does not include the "q" (query) parameter, it must be added by the code using this class before the parameters are
+    set into the http request
+    """
+
     def __init__(
         self,
         categories: List[str] = [],
@@ -32,6 +59,24 @@ class SearchParameters:
         enabled_engines: List[str] = [],
         disabled_engines: List[str] = [],
     ):
+        """
+        Sets the internal members of the class to the constructor arguments
+
+        see https://docs.searxng.org/dev/search_api.html for information on allowed values for each argument
+
+        Args:
+            categories       (List[str]): Specifies the active search categories
+            engines          (List[str]): Specifies which engines should be active for this search
+            language               (str): Specifies the language to get search results from
+            pageno                 (int): Specifies which page of the search results to return
+            time_range             (str): Specifies the time range from which to pull results (if the search engine supports this)
+            image_proxy           (bool): Whether or not to proxy images through the SearXNG instance
+            safe_search            (str): Whether or not to enable safe search on the engines that support it (allowed vals: 0, 1, 2)
+            enabled_plugins  (List[str]): A list of the server's plugins that should be enabled for the search
+            disabled_plugins (List[str]): A list of the server's plugins that should be disabled for the search
+            enabled_engines  (List[str]): A list of engines that should be enabled for the search
+            disabled_engines (List[str]): A list of engines that should be disabled for the search
+        """
         self.categories = categories
         self.engines = engines
         self.language = language
@@ -60,6 +105,23 @@ class SearchParameters:
         enabled_engines=None,
         disabled_engines=None,
     ):
+        """
+        Updates the internal members to the value provided, if an argument is passed in as None it will be ignored
+
+        Args:
+            categories       (List[str]): Specifies the active search categories
+            engines          (List[str]): Specifies which engines should be active for this search
+            language               (str): Specifies the language to get search results from
+            pageno                 (int): Specifies which page of the search results to return
+            time_range             (str): Specifies the time range from which to pull results (if the search engine supports this)
+            image_proxy           (bool): Whether or not to proxy images through the SearXNG instance
+            safe_search            (str): Whether or not to enable safe search on the engines that support it (allowed vals: 0, 1, 2)
+            enabled_plugins  (List[str]): A list of the server's plugins that should be enabled for the search
+            disabled_plugins (List[str]): A list of the server's plugins that should be disabled for the search
+            enabled_engines  (List[str]): A list of engines that should be enabled for the search
+            disabled_engines (List[str]): A list of engines that should be disabled for the search
+
+        """
         if categories != None:
             self.categories = categories
 
@@ -94,6 +156,13 @@ class SearchParameters:
             self.disabled_engines = disabled_engines
 
     def as_dict(self):
+        """
+        Converts the members of this class into a dictionary that can be passed to a requests object for a request to the
+        SearXNG API.
+
+        Returns:
+            dict - the params dictionary representation of this class
+        """
         param_dict = {
             "pageno": str(self.pageno),
             "format": self.format,
@@ -131,10 +200,27 @@ class SearXNG:
     def __init__(
         self, base_url: str, search_params: SearchParameters = SearchParameters()
     ) -> None:
+        """
+        Sets the api endpoint and default search parameters
+
+        Args:
+            base_url                   (str): The url of the SearXNG instance. This should be the base URL, not the api endpoint
+            search_params (SearchParameters): The SearchParameters object contining the default parameters to be used in searches from this object
+                                              if not provided, the defaults will be used
+        """
         self.endpoint = base_url + "/search"
         self.search_params = search_params
 
     def parse_api_json(self, json: dict) -> List[SearchResult]:
+        """
+        Takes the json output from the SearXNG api and parses it into a list of SearchResult objects
+
+        Args:
+            json (dict): The json returned from an api request
+
+        Returns:
+            List[SearchResult] - The list of search results represented by the json
+        """
         assembled_list = []
         for current_dict in json["results"]:
             assembled_list.append(
@@ -150,6 +236,21 @@ class SearXNG:
         return assembled_list
 
     def search(self, query: str, n_pages: int = 1, search_params=None):
+        """
+        Preforms a search on the API. If more than 1 page of results has been requested, then a seperate request will be made
+        for each page.
+
+        If no SearchParameters object is provided in the argument search_params, then this class's set defaults will be used instead
+
+        Args:
+            query                      (str): The serch to preform
+            n_pages                    (int): The number of search results pages to request
+            search_params (SearchParameters): The parameters to use for the search
+
+        Returns:
+            List[SearchResult] - A list of the search results of query
+
+        """
         if search_params == None:
             search_params = self.search_params.as_dict()
         else:
@@ -172,10 +273,26 @@ class SearXNG:
 
         return results
 
-    def search_from_sites(self, query: str, sites: List[str], search_params=None):
+    def search_from_sites(
+        self, query: str, sites: List[str], search_params=None, n_pages: int = 1
+    ):
+        """
+        Preforms a search with query, only returns results from the domains specified in the sites list.
+
+        This is done by appending site:<domain 1> OR site:<domain 2> ... OR site:<domain n> to the query string before it is sent
+        """
         pass
 
     def search_from_sites_combined(
         self, query: str, sites: List[str], search_params=None
     ):
+        """
+        Preforms a search with query only on the domains specified in sites. A seperate api call is made to get results from each domain.
+
+        Ex. sites = ["amazon.com", "walmart.com"]
+
+        2 requests would be made. One with "<query> site:amazon.com" and one with "<query> site:walmart.com" as the query string
+
+        Results are combined into a single results list following the order of the domains in sites
+        """
         pass
